@@ -48,10 +48,12 @@ def rollout(node, player):
         state, player, won = s.move(state, action, player)
     return won
 
-def backpropagation(node, result):
+def backpropagation(node, result, player):
     while node:
         node.visit_count += 1
-        if result == 1: node.wins += 1
+        if result not in [-1, 0]:
+            node.wins += (result != player) * 1
+        player = s.next_player(player)
         node = node.parent
 
 def best_child(node):
@@ -59,43 +61,40 @@ def best_child(node):
     return node.children[visit_counts.index(max(visit_counts))]
 
 def mcts(root, player):
-    for _ in range(1000):
+    for _ in range(10000):
         leaf, leaf_player = traverse(root, player)
         result = rollout(leaf, leaf_player)
-        backpropagation(leaf, result)
+        backpropagation(leaf, result, leaf_player)
     return best_child(root)
 
 root = Node(s.init(), s.get_action_space(s.init()))
 
-for i in range(10):
+won = False
+# Player 1 = 1; Player 2 = 2; Nothing = 0
+player = random.randrange(2) + 1
+state = s.init()
 
-    won = False
-    # Player 1 = 1; Player 2 = 2; Nothing = 0
-    player = 1
-    state = s.init()
+node = root
 
-    node = root
+print(state)
+
+while not won:
+
+    print(f"Player: {player}")
+
+    best = mcts(node, player)
+
+    if player == 1:
+        node = best
+    else:
+        child_actions = [n.action for n in node.children]
+        random_action = int(input("Field: "))
+        node = node.children[child_actions.index(random_action)]
+
+    action = node.action
+
+    state, player, won = s.move(state, action, player)
 
     print(state)
 
-    while not won:
-
-        print(f"Player: {player}")
-
-        best = mcts(node, player)
-
-        if player == 1:
-            node = best
-        else:
-            child_actions = [n.action for n in node.children]
-            print(f"Possible Actions: {sorted(child_actions)}")
-            random_action = int(input("Action: "))
-            node = node.children[child_actions.index(random_action)]
-
-        action = node.action
-
-        state, player, won = s.move(state, action, player)
-
-        print(state)
-
-    print(won)
+print(won)
