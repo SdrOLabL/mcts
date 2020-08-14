@@ -5,10 +5,9 @@ import random
 import copy
 
 class Node:
-    def __init__(self, state, actions, action = None, parent = None):
+    def __init__(self, actions, action = None, parent = None):
         self.wins = 0
         self.visit_count = 0
-        self.state = state
         self.actions = actions
         self.parent = parent
         # action -> the action that lead to this node
@@ -27,21 +26,20 @@ def best_uct(node):
     values = [n.get_value() for n in node.children]
     return node.children[values.index(max(values))]
 
-def traverse(node, player):
-    while not node.is_leaf() and not s.check_won(node.state):
+def traverse(node, player, state):
+    while not node.is_leaf() and not s.check_won(state):
         node = best_uct(node)
-        player = s.next_player(player)
-    if not s.check_won(node.state):
+        state, player, _ = s.move(state, node.action, player)
+    if not s.check_won(state):
         unexpanded = set(node.actions) - set([n.action for n in node.children])
         action = random.choice(tuple(unexpanded))
-        state, player, _ = s.move(node.state, action, player)
-        child = Node(state, s.get_action_space(state), action, node)
+        state, player, _ = s.move(state, action, player)
+        child = Node(s.get_action_space(state), action, node)
         node.children.append(child)
         node = child
-    return node, player
+    return node, player, state
 
-def rollout(node, player):
-    state = copy.deepcopy(node.state)
+def rollout(node, player, state):
     won = s.check_won(state)
     while not won:
         action = s.get_action_space_sample(state)
@@ -60,41 +58,43 @@ def best_child(node):
     visit_counts = [n.visit_count for n in node.children]
     return node.children[visit_counts.index(max(visit_counts))]
 
-def mcts(root, player):
-    for _ in range(10000):
-        leaf, leaf_player = traverse(root, player)
-        result = rollout(leaf, leaf_player)
+def mcts(root, player, state):
+    state_copy = copy.deepcopy(state)
+    for _ in range(1000):
+        leaf, leaf_player, state_ = traverse(root, player, state_copy)
+        result = rollout(leaf, leaf_player, state_)
         backpropagation(leaf, result, leaf_player)
     return best_child(root)
 
-root = Node(s.init(), s.get_action_space(s.init()))
+root = Node(s.get_action_space(s.init()))
 
-won = False
-# Player 1 = 1; Player 2 = 2; Nothing = 0
-player = random.randrange(2) + 1
-state = s.init()
+for _ in range(10):
+    won = False
+    # Player 1 = 1; Player 2 = 2; Nothing = 0
+    player = random.randrange(2) + 1
+    state = s.init()
 
-node = root
-
-print(state)
-
-while not won:
-
-    print(f"Player: {player}")
-
-    best = mcts(node, player)
-
-    if player == 1:
-        node = best
-    else:
-        child_actions = [n.action for n in node.children]
-        random_action = int(input("Field: "))
-        node = node.children[child_actions.index(random_action)]
-
-    action = node.action
-
-    state, player, won = s.move(state, action, player)
+    node = root
 
     print(state)
 
-print(won)
+    while not won:
+
+        print(f"Player: {player}")
+
+        best = mcts(node, player, state)
+
+        if player == 1:
+            node = best
+        else:
+            child_actions = [n.action for n in node.children]
+            random_action = int(input("Field: "))
+            node = node.children[child_actions.index(random_action)]
+
+        action = node.action
+
+        state, player, won = s.move(state, action, player)
+
+        print(state)
+
+    print(won)
