@@ -47,10 +47,11 @@ def rollout(node, player, state):
     return won
 
 def backpropagation(node, result, player):
+    increase = s.next_player(result)
     while node:
         node.visit_count += 1
-        if result not in [-1, 0]:
-            node.wins += (result != player) * 1
+        if result != -1:
+            node.wins += (increase == player) * 1
         player = s.next_player(player)
         node = node.parent
 
