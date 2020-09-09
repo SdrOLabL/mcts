@@ -1,101 +1,100 @@
 import math
-# the state class contains methods for tic tac toe
 import state as s
-import random
 import copy
+import numpy as np
 
-class Node:
-    def __init__(self, actions, action = None, parent = None):
-        self.wins = 0
-        self.visit_count = 0
-        self.actions = actions
-        self.parent = parent
-        # action -> the action that lead to this node
-        self.action = action
-        self.children = []
-    def get_value(self):
-        if self.visit_count == 0: return math.inf
-        exploitation = self.wins / self.visit_count
-        exploration = math.sqrt(2) * math.sqrt(math.log(self.parent.visit_count) / self.visit_count)
-        # returns the uct value
-        return exploitation + exploration
-    def is_leaf(self):
-        return len(self.actions) != len(self.children)
+class MCTS:
+    def __init__(self):
+        self.visit_counts = {}
+        self.values = {}
+        self.uct = {}
 
-def best_uct(node):
-    values = [n.get_value() for n in node.children]
-    return node.children[values.index(max(values))]
+    def is_leaf(self, state):
+        return state not in self.visit_counts
 
-def traverse(node, player, state):
-    while not node.is_leaf() and not s.check_won(state):
-        node = best_uct(node)
-        state, player, _ = s.move(state, node.action, player)
-    if not s.check_won(state):
-        unexpanded = set(node.actions) - set([n.action for n in node.children])
-        action = random.choice(tuple(unexpanded))
-        state, player, _ = s.move(state, action, player)
-        child = Node(s.get_action_space(state), action, node)
-        node.children.append(child)
-        node = child
-    return node, player, state
+    def find_leaf(self, state, player):
+        states = []
+        actions = []
+        cur_state = state
+        cur_player = player
+        value = None
+        while not self.is_leaf(cur_state):
+            states.append(cur_state)
+            uct_values = self.uct[cur_state]
+            invalid_actions = set(range(9)) - set(s.get_action_space(cur_state))
+            for invalid_action in invalid_actions:
+                uct_values[invalid_action] = -math.inf
+            action = np.argmax(uct_values)
+            actions.append(action)
+            cur_state, cur_player, won = s.move(cur_state, action, cur_player)
+            if won:
+                value = 0 if won == -1 else -1
 
-def rollout(node, player, state):
-    won = s.check_won(state)
-    while not won:
-        action = s.get_action_space_sample(state)
-        state, player, won = s.move(state, action, player)
-    return won
+        return cur_state, cur_player, states, actions, value
 
-def backpropagation(node, result, player):
-    increase = s.next_player(result)
-    while node:
-        node.visit_count += 1
-        if result != -1:
-            node.wins += (increase == player) * 1
-        player = s.next_player(player)
-        node = node.parent
+    def expand(self, state):
+        self.visit_counts[state] = [0] * 9
+        self.values[state] = [0] * 9
+        self.uct[state] = [math.inf] * 9
 
-def best_child(node):
-    visit_counts = [n.visit_count for n in node.children]
-    return node.children[visit_counts.index(max(visit_counts))]
+    def rollout(self, state, player):
+        cur_player = player
+        while True:
+            action = s.get_action_space_sample(state)
+            state, cur_player, won = s.move(state, action, cur_player)
+            if won:
+                if won == player: return 1
+                elif won == -1: return 0
+                else: return -1
 
-def mcts(root, player, state):
-    state_copy = copy.deepcopy(state)
-    for _ in range(1000):
-        leaf, leaf_player, state_ = traverse(root, player, state_copy)
-        result = rollout(leaf, leaf_player, state_)
-        backpropagation(leaf, result, leaf_player)
-    return best_child(root)
+    def backpropagate(self, states, actions, value):
+        cur_value = -value
+        for state, action in zip(reversed(states), reversed(actions)):
+            self.visit_counts[state][action] += 1
+            self.values[state][action] += cur_value
 
-root = Node(s.get_action_space(s.init()))
+            visit_counts = self.visit_counts[state]
+            values = self.values[state]
+            parent_visit_count = sum(visit_counts)
+            self.uct[state] = [value / visit_count + 
+                               math.sqrt(2) * math.sqrt(math.log(parent_visit_count) / visit_count)
+                               if visit_count > 0 else math.inf for value, visit_count in zip(values, visit_counts)]
 
-for _ in range(10):
+            cur_value = -cur_value
+
+    def get_policy(self, state):
+        visit_counts = self.visit_counts[state]
+        return np.argmax(visit_counts)
+
+    def monte_carlo_tree_search(self, state, player, iterations):
+        for _ in range(iterations):
+            leaf_state, leaf_player, states, actions, value = self.find_leaf(state, player)
+            if value is None:
+                self.expand(leaf_state)
+                value = self.rollout(leaf_state, leaf_player)
+            self.backpropagate(states, actions, value)
+        return self.get_policy(state)
+
+mcts = MCTS()
+
+results = {-1: 0, 1: 0, 2: 0}
+
+for i in range(100):
+
     won = False
-    # Player 1 = 1; Player 2 = 2; Nothing = 0
-    player = random.randrange(2) + 1
+    player = s.get_random_player()
     state = s.init()
 
-    node = root
-
-    print(state)
-
     while not won:
 
-        print(f"Player: {player}")
+        # print(f"Player: {player}")
 
-        best = mcts(node, player, state)
-
-        if player == 1:
-            node = best
-        else:
-            child_actions = [n.action for n in node.children]
-            random_action = int(input("Field: "))
-            node = node.children[child_actions.index(random_action)]
-
-        action = node.action
-
+        action = mcts.monte_carlo_tree_search(state, player, 100)
         state, player, won = s.move(state, action, player)
 
-        print(state)
+        # print(s.decode(state))
 
-    print(won)
+    print(i, won)
+    results[won] += 1
+
+print(results)

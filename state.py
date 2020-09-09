@@ -4,23 +4,40 @@ import copy
 
 # returns new board
 def init():
-    return np.zeros((3, 3), dtype=int)
+    return encode(np.zeros((3, 3), dtype=int))
+
+def get_random_player():
+    return random.randrange(2) + 1
+
+def encode(state):
+    encoded = ""
+    for row in state:
+        for element in row:
+            encoded += str(element)
+    return encoded
+
+def decode(state):
+    encoded = []
+    for c in state:
+        encoded.append(int(c))
+    return np.array(encoded).reshape(3, 3)
 
 def move(state, action, player):
-    state = copy.deepcopy(state)
+    state = decode(state)
     x = action % state.shape[0]
     y = action // state.shape[0]
     if state[y][x] != 0: print("wrong move")
     state[y][x] = player
     player = next_player(player)
     won = check_won(state)
-    return state, player, won
+    return encode(state), player, won
 
 def next_player(player):
     return 1 + 1 * (player == 1)
 
 # returns legal actions in given state
 def get_action_space(state):
+    state = decode(state)
     flat_list = [item for row in state for item in row]
     return [i for i, item in enumerate(flat_list) if item == 0]
 
